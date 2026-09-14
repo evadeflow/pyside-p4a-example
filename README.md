@@ -266,9 +266,16 @@ spec validation:
 [app] "sensorLandscape" is not a valid  value for "orientation"
 ```
 
-The Android status bar and the tablet taskbar still draw over the app; hiding
-those needs immersive mode, which is an application-level concern rather than
-a packaging flag.
+That still leaves the Android status bar and the tablet taskbar drawn over the
+app. No packaging flag removes those -- they need immersive mode, which is an
+application-level decision. `app/main.py` calls `window.showFullScreen()` on
+Android, which Qt maps onto immersive mode, giving a genuinely edge-to-edge
+2560x1600 surface.
+
+The call is guarded by `QGuiApplication.platformName() == "android"` because
+the same file also runs under Termux:X11, where there is no window manager to
+honour a fullscreen request and the frameless + `setGeometry` path is required
+instead.
 
 ## A trap worth knowing about: uv hardlinks
 
