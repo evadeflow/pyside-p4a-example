@@ -98,16 +98,28 @@ def patch_orientation(site: Path) -> None:
     buildozer defaults to portrait with the system bars visible, which
     letterboxes the app with black bars on a landscape tablet.
 
-    Valid `orientation` values are only landscape, portrait, landscape-reverse
-    and portrait-reverse -- buildozer rejects anything else (e.g.
-    "sensorLandscape") during spec validation.
+    Do NOT fix this by pinning `orientation` to landscape. Large-screen
+    Android displays report `ignoreOrientationRequest=true`: they ignore an
+    app's requested orientation outright and letterbox a fixed-orientation app
+    rather than rotating the screen for it. Pinning therefore does not make
+    the app landscape -- it only guarantees black bars whenever the display
+    happens to sit the other way round.
+
+    Set the manifest orientation to `unspecified` instead, so the app follows
+    whatever the system does and fills the screen in either rotation. p4a's
+    get_manifest_orientation() lets --manifest-orientation win over
+    --orientation, and buildozer exposes it as android.manifest.orientation.
+
+    (For reference, buildozer's `orientation` key accepts only landscape,
+    portrait, landscape-reverse and portrait-reverse; anything else, such as
+    "sensorLandscape", is rejected during spec validation.)
     """
     patch(
         site / "PySide6/scripts/deploy_lib/android/buildozer.py",
         '        self.set_value("app", "p4a.bootstrap", "qt")',
         '        self.set_value("app", "p4a.bootstrap", "qt")\n'
         f'        # {MARKER}: orientation-fullscreen\n'
-        '        self.set_value("app", "orientation", "landscape")\n'
+        '        self.set_value("app", "android.manifest.orientation", "unspecified")\n'
         '        self.set_value("app", "fullscreen", "1")',
         "orientation-fullscreen",
     )

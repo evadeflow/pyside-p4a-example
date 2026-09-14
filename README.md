@@ -252,19 +252,46 @@ venv's `bin/` on `PATH` gives:
 And `java` must be **17** — the Android Gradle plugin rejects 8, which is
 still the default alternative on some Ubuntu installs.
 
-### 8. Portrait letterboxing
+### 8. Orientation: do not pin it on a large screen
 
 buildozer defaults to portrait with the system bars visible, so on a landscape
-tablet the app renders as a portrait slab with black bars either side. Set
-`orientation` and `fullscreen` in the generated spec.
+tablet the app renders as a portrait slab with black bars either side.
 
-`orientation` accepts only `landscape`, `portrait`, `landscape-reverse`,
-`portrait-reverse` — anything else (`sensorLandscape`, say) is rejected during
-spec validation:
+The tempting fix — pin `orientation = landscape` — is wrong, and quietly so.
+Large-screen Android displays report:
 
 ```
-[app] "sensorLandscape" is not a valid  value for "orientation"
+mSetIgnoreOrientationRequest=true
+ignoreOrientationRequest=true
 ```
+
+Such a display **ignores an app's requested orientation entirely**. It does
+not rotate the screen to suit a fixed-orientation app; it keeps its own
+rotation and letterboxes the app instead. Pinning landscape therefore does not
+make the app landscape — it only guarantees black bars whenever the display
+sits the other way round, and stops the app following the device when it is
+turned. It can look like it works, purely because the display happened to
+already be in that orientation.
+
+Set the manifest orientation to `unspecified` instead, so the app follows the
+system and fills the screen in either rotation:
+
+```
+android.manifest.orientation = unspecified
+```
+
+p4a's `get_manifest_orientation()` lets `--manifest-orientation` win over
+`--orientation`, and buildozer exposes it as `android.manifest.orientation`.
+Confirm it landed with:
+
+```bash
+aapt2 dump xmltree --file AndroidManifest.xml app.apk | grep screenOrientation
+# screenOrientation(0x0101001e)=-1   -1 = UNSPECIFIED;  0 = landscape (pinned)
+```
+
+(For reference, buildozer's own `orientation` key accepts only `landscape`,
+`portrait`, `landscape-reverse`, `portrait-reverse`; anything else, such as
+`sensorLandscape`, is rejected during spec validation.)
 
 That still leaves the Android status bar and the tablet taskbar drawn over the
 app. No packaging flag removes those -- they need immersive mode, which is an
