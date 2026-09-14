@@ -241,6 +241,22 @@ The Android status bar and the tablet taskbar still draw over the app; hiding
 those needs immersive mode, which is an application-level concern rather than
 a packaging flag.
 
+## A trap worth knowing about: uv hardlinks
+
+`uv` installs packages by hardlinking out of its shared cache, so a file in a
+virtualenv is often the *same inode* as `~/.cache/uv/archive-v0/...`. Editing
+it in place — which is what `open(path, "w")` and `Path.write_text` do —
+rewrites the cache too, and every later `uv pip install` of that package on
+that machine silently hands out the patched file.
+
+That is how a "patch the venv only" change leaks machine-wide. It also makes
+the patches look mysteriously pre-applied in a freshly created venv.
+
+`apply_patches.py` writes a temporary file and renames it over the target, so
+a new inode is created and the cache is untouched. If you ever hit this,
+`uv cache clean <pkg>` plus deleting the offending `archive-v0/` entry
+restores it.
+
 ## Notes on the app itself
 
 `app/main.py` tracks `QScreen.geometryChanged` and re-applies the screen

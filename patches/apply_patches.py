@@ -15,7 +15,10 @@ Run as:
 Idempotent: every patch is skipped if it is already present.
 """
 
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 MARKER = "PATCHED-BY-PYSIDE-P4A-EXAMPLE"
@@ -23,6 +26,30 @@ MARKER = "PATCHED-BY-PYSIDE-P4A-EXAMPLE"
 # The newest python-for-android `develop` commit whose python3 recipe is still
 # 3.11.13 and which already carries the `qt` bootstrap.
 P4A_COMMIT = "3762c88c56e3443efb8eba2a02a2604b680240fd"
+
+
+def write_breaking_hardlinks(path: Path, text: str) -> None:
+    """
+    Replace `path`'s contents without writing through a hardlink.
+
+    uv installs packages by hardlinking files out of its shared cache
+    (~/.cache/uv/archive-v0/...), so a file in a virtualenv is frequently the
+    *same inode* as the cached copy. Truncating it in place -- which is what
+    open(path, "w") and Path.write_text do -- edits the cache as well, and
+    every future `uv pip install` of that package on this machine then hands
+    out the patched file. That is a silent, machine-wide side effect.
+
+    Writing a temporary file and renaming it over the target creates a fresh
+    inode, leaving the cached copy untouched.
+    """
+    with tempfile.NamedTemporaryFile(
+        "w", dir=path.parent, prefix=path.name + ".", suffix=".tmp", delete=False
+    ) as handle:
+        handle.write(text)
+        tmp = Path(handle.name)
+
+    shutil.copymode(path, tmp)
+    os.replace(tmp, path)
 
 
 def patch(path: Path, old: str, new: str, label: str) -> None:
@@ -39,7 +66,7 @@ def patch(path: Path, old: str, new: str, label: str) -> None:
             f"    The upstream source has changed; re-check this patch."
         )
 
-    path.write_text(text.replace(old, new))
+    write_breaking_hardlinks(path, text.replace(old, new))
     print(f"  + {label}: applied")
 
 
