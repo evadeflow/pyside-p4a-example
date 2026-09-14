@@ -56,6 +56,35 @@ pyside6-6.11.2-6.11.2-cp311-cp311-android_aarch64.whl
 shiboken6-6.11.2-6.11.2-cp311-cp311-android_aarch64.whl
 ```
 
+Note the tag is `cp311-cp311`, **not** `cp311-abi3`. PyPI's desktop wheels
+*are* stable-ABI (`cp310-abi3-manylinux_2_34_x86_64`, usable on 3.10+), so it
+is easy to assume the same latitude applies here. It does not — the Android
+build links Python differently:
+
+```
+# Android wheel                          # desktop manylinux wheel
+Tag: cp311-cp311-android_aarch64         Tag: cp310-abi3-manylinux_2_34_x86_64
+NEEDED libpython3.11.so                  (no libpython dependency at all)
+NEEDED libc++_shared.so                  NEEDED libstdc++.so.6
+NEEDED libdl.so                          NEEDED libm.so.6
+NEEDED libc.so                           NEEDED libc.so.6
+```
+
+On desktop Linux, CPython extension modules do not link against libpython --
+their symbols resolve from the interpreter executable, which is what lets one
+`abi3` wheel serve many Python versions. python-for-android instead builds
+Python as a shared library, so extensions link it explicitly and the soname
+`libpython3.11.so` is recorded in the ELF `DT_NEEDED` entries. `.abi3.so` in
+the *filename* refers to the limited API symbol set; it says nothing about
+which libpython soname the linker wrote down.
+
+Hence the failure below is a `dlopen` failure, not an import error, and no
+amount of ABI compatibility gets around it. Verify for yourself with:
+
+```bash
+readelf -d shiboken6/libshiboken6.abi3.so | grep NEEDED
+```
+
 **The app name must be a valid Java identifier.** python-for-android derives
 the package as `org.<name>.<name>`, so a hyphen fails at the very last step,
 after the whole cross-compile:
